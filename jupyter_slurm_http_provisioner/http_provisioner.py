@@ -26,6 +26,7 @@ class SSHConfig:
     """Configuration for ssh connection"""
     username:str    # username of the host to ssh to
     hostname:str    # host to ssh to
+    port:str
 
 ports_legend = ("shell_port","iopub_port","stdin_port","control_port","hb_port")
 
@@ -54,7 +55,8 @@ class SlurmHTTPProvisioner(KernelProvisionerBase):
             secret=config.get("secret",""))
         self._ssh_config = SSHConfig(
             username=config.get("username"),
-            hostname=config.get("hostname"))
+            hostname=config.get("hostname"),
+            port=config.get("port","22"))
 
         self._auth_token = None
         self._remote_public_key = None
@@ -249,6 +251,7 @@ class SlurmHTTPProvisioner(KernelProvisionerBase):
             payload[port_name] = self._available_ports[i]
         payload["user"] = self._ssh_config.username
         payload["host"] = self._ssh_config.hostname
+        payload["port"] = self._ssh_config.port
         result = await self._fetch_api("post","start_tunnels",payload)
         if result.status_code != 200:
             raise RuntimeError(f"Failed to start SSH tunnels: {result.text}")

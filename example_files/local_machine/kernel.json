@@ -9,7 +9,8 @@
         "api_key": "1234",
         "secret": "123456789",
         "username": "debian",
-        "hostname": "xxx.xxx.xxx.xxx"
+        "hostname": "xxx.xxx.xxx.xxx",
+        "port": "22"
       }
     }
   }
