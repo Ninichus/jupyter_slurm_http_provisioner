@@ -1,12 +1,9 @@
 """Kernel Provisioner for Jupyter that uses HTTP(S) to launch kernels on remote machines, 
 and SSH tunnels to connect to it."""
 import logging
-import secrets
 import asyncio
 import socket
 import getpass
-import hmac
-import hashlib
 from dataclasses import dataclass
 import httpx # pylint: disable=import-error
 from jupyter_client import KernelProvisionerBase # pylint: disable=import-error
@@ -19,7 +16,6 @@ class HTTPConfig:
     """Configuration for HTTP connection."""
     url: str        # url of the api
     api_key: str    # api_key to ensure the instance is authorized to call the api
-    secret: str     # secret to ensure the api hasn't been impersonated
 
 @dataclass
 class SSHConfig:
@@ -51,8 +47,7 @@ class SlurmHTTPProvisioner(KernelProvisionerBase):
 
         self._http_config = HTTPConfig(
             url=config.get("url","").strip("/"),
-            api_key=config.get("api_key",""),
-            secret=config.get("secret",""))
+            api_key=config.get("api_key",""))
         self._ssh_config = SSHConfig(
             username=config.get("username"),
             hostname=config.get("hostname"),
@@ -74,18 +69,6 @@ class SlurmHTTPProvisioner(KernelProvisionerBase):
     async def launch_kernel(self, cmd, **kwargs): # pylint: disable=unused-argument
         """ Launches a Jupyter kernel on a remote machine using Slurm and HTTPS."""
         try:
-            # ----- GETTING THE REMOTE PUBLIC KEY -----
-            # Send a get request to the remote machine to retrieve its public key
-            _log.info("Fetching the public key of the remote machine...")
-            await self._fetch_public_key()
-            _log.info("Public key retrieved successfully.")
-
-            # Adding the public key to the SSH config
-            _log.info("Adding the public key to the SSH config...")
-            await self._authorize_public_key()
-            _log.info("Public key added successfully.")
-
-
             # ----- SUBMITTING THE SLURM JOB -----
             # Starts a Slurm job to run the Jupyter kernel
             _log.info("Submitting Slurm job to start the Jupyter kernel...")
@@ -96,6 +79,18 @@ class SlurmHTTPProvisioner(KernelProvisionerBase):
             _log.info("Waiting for the Slurm job to start...")
             await self._wait_slurm_rdy()
             _log.info("Slurm job is now running.")
+
+
+             # ----- GETTING THE REMOTE PUBLIC KEY -----
+            # Send a get request to the remote machine to retrieve its public key
+            _log.info("Fetching the public key of the remote machine...")
+            await self._fetch_public_key()
+            _log.info("Public key retrieved successfully.")
+
+            # Adding the public key to the SSH config
+            _log.info("Adding the public key to the SSH config...")
+            await self._authorize_public_key()
+            _log.info("Public key added successfully.")
 
 
             # ----- CONNECTING TO THE REMOTE KERNEL -----
@@ -154,36 +149,15 @@ class SlurmHTTPProvisioner(KernelProvisionerBase):
 
 
     async def _fetch_public_key(self):
-        challenge = secrets.token_hex(16)
-        payload = {"challenge": challenge}
-        response = await self._fetch_api("get","pub_key",payload)
+        response = await self._fetch_api("get","pub_key")
         if response.status_code != 200:
             raise RuntimeError(f"Failed to fetch public key: {response.text}")
 
         parsed_response = response.json()
-        received_challenge = parsed_response.get("hashChallenge")
 
-        def words_to_bytes(words):
-            b = bytearray()
-            for word in words:
-                # Handle negative numbers like JavaScript/Java would (2's complement 32-bit)
-                word = word & 0xFFFFFFFF
-                b.extend(word.to_bytes(4, byteorder='big'))
-            return bytes(b)
-
-        received_hmac = words_to_bytes(
-            received_challenge["words"])[:received_challenge["sigBytes"]]
-        expected_hmac = hmac.new(
-            self._http_config.secret.encode(), challenge.encode(), hashlib.sha256).digest()
-
-        if not parsed_response.get("sshKey"):
+        if not parsed_response.get("key"):
             raise RuntimeError("No public key received from remote server.")
-        if not hmac.compare_digest(received_hmac, expected_hmac):
-            raise RuntimeError("Possible impersonation")
-        if not parsed_response.get("token"):
-            raise RuntimeError("Invalid response from the api: missing api")
-        self._auth_token = parsed_response.get("token")
-        self._remote_public_key = parsed_response.get("sshKey")
+        self._remote_public_key = parsed_response.get("key")
 
 
     async def _authorize_public_key(self):

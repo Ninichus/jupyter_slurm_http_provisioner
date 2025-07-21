@@ -9,4 +9,4 @@ This package registers slurm_http_provisioner endpoint.
 """
 from .http_provisioner import SlurmHTTPProvisioner
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
