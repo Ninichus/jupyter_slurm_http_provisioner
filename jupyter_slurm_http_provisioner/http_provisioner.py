@@ -231,6 +231,15 @@ class SlurmHTTPProvisioner(KernelProvisionerBase):
             raise RuntimeError(f"Failed to start SSH tunnels: {result.text}")
 
 
+    async def _terminate_tunnels(self):
+        """Kills both ssh tunnels and sshfs mount"""
+        # TODO : kill in a softer way ? if a user is connected in ssh : connection will be closed # pylint: disable=fixme
+        try:
+            await asyncio.create_subprocess_exec("pkill ssh")
+        except Exception as e: # pylint: disable=broad-exception-caught
+            _log.error("Error terminating SSH tunnels: %s", e)
+
+
     async def _ask_for_cleanup(self):
         await self._fetch_api("delete","tunnels")
 
@@ -261,6 +270,7 @@ class SlurmHTTPProvisioner(KernelProvisionerBase):
     async def cleanup(self, restart=False): # pylint: disable=missing-function-docstring, unused-argument
         _log.info("Cleaning up")
         try:
+            await self._terminate_tunnels()
             await self._ask_for_cleanup()
         except Exception as e: # pylint: disable=broad-exception-caught
             _log.error("Error during cleanup: %s", e)
