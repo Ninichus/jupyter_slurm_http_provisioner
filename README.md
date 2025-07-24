@@ -10,20 +10,21 @@ Once configured, on the Jupyter Notebook / Lab interface, you can just select a 
 
 ## Setup
 
-### 1 - Build a remote wrapper script
+`pip install jupyter-slurm-http-provider`
 
-This remote wrapper will be called when we want to launch the kernel.
-Thus, it should:
+### 1 - Build an api
 
-- Start a slurm job that will start a kernel (the connection file should be named .../kernel-{slurm_job_id}.json, thus the command inside a batch script could be `python -m ipykernel_launcher -f=/tmp/kernel-${SLURM_JOB_ID}.json`)
-- Wait for the job to start
-- Return the slurm job id
+5 endpoints are mandatory :
 
-See the example file
+- GET - /pub_key -> returns the public ssh key of the compute node that runs the kernel
+- POST - /launch_kernel -> launches a kernel in a slurm job
+- GET - /ready -> returns the state of the slurm job, and if started, returns the kernel's connection file
+- POST - /start_tunnels -> should establish ssh tunnels between the compute node and the notebook, optionally mount folders
+- DELETE - /tunnels -> called during cleanup, after the tunnels are closed. It could start a garbage collector
 
-### 2 - Setup a kernel
+### 2 - Set up a kernel
 
-This is the kernel that will use the slurm-http-provisioner. It will be displayed in the Notebook / Lab interface.
+This is the kernel that will use the slurm-http-provisioner. Its name will be displayed in the Notebook / Lab interface.
 
 ```
 #~/.local/share/jupyter/kernels/slurm-http/kernel.json
@@ -36,8 +37,7 @@ This is the kernel that will use the slurm-http-provisioner. It will be displaye
       "config": {
         "url": "http://example.com",
         "api_key": "1234",
-        "secret": "123456789",
-        "username": "debian",
+        "username": "xxxx",
         "hostname": "xxx.xxx.xxx.xxx"
       }
     }
